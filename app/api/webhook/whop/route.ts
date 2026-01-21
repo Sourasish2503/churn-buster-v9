@@ -3,11 +3,12 @@ import crypto from "crypto";
 import { addPaidCredits } from "@/lib/credits";
 import { db } from "@/lib/firebase";
 
-// Credit tiers: amount in cents -> credits
+// ✅ HARDCODED CREDIT TIERS - amount in cents -> credits
+// This maps Whop payment amounts to credit values
 const CREDIT_TIERS: Record<number, number> = {
-  5000: 10,    // $50 = 10 credits
-  20000: 50,   // $200 = 50 credits
-  70000: 200,  // $700 = 200 credits
+  5000: 10,   // $50 = 10 credits
+  20000: 50,  // $200 = 50 credits
+  70000: 200, // $700 = 200 credits
 };
 
 // Calculate credits for any amount (fallback for non-standard amounts)
@@ -16,7 +17,7 @@ function calculateCredits(amountCents: number): number {
   if (CREDIT_TIERS[amountCents] !== undefined) {
     return CREDIT_TIERS[amountCents];
   }
-  
+
   // For non-standard amounts, calculate proportionally ($5 = 1 credit)
   const credits = Math.floor(amountCents / 500);
   return Math.max(credits, 0);
@@ -28,7 +29,6 @@ function verifySignature(rawBody: string, signature: string, secret: string): bo
     .createHmac("sha256", secret)
     .update(rawBody)
     .digest("hex");
-
   const sigBuffer = Buffer.from(signature);
   const expectedBuffer = Buffer.from(expected);
 
@@ -57,12 +57,11 @@ async function handlePaymentSucceeded(payment: any): Promise<void> {
   }
 
   const creditsToAdd = calculateCredits(amount);
-  
   console.log(`Payment received: company=${companyId}, amount=$${amount / 100}, credits=${creditsToAdd}`);
 
   if (creditsToAdd > 0) {
     await addPaidCredits(companyId, creditsToAdd);
-    
+
     // Log the transaction for audit trail
     if (db) {
       await db.collection("businesses").doc(companyId).collection("credit_transactions").add({
@@ -74,7 +73,7 @@ async function handlePaymentSucceeded(payment: any): Promise<void> {
         timestamp: new Date().toISOString(),
       });
     }
-    
+
     console.log(`Added ${creditsToAdd} credits to company ${companyId}`);
   } else {
     console.warn(`Payment amount too low for credits: company=${companyId}, amount=$${amount / 100}`);
@@ -97,23 +96,22 @@ async function handleMembershipValid(membership: any): Promise<void> {
   if (db) {
     const companyRef = db.collection("businesses").doc(companyId);
     const doc = await companyRef.get();
-    
+
     if (!doc.exists) {
       await companyRef.set({
         createdAt: new Date().toISOString(),
         membershipId,
         status: "active",
       });
-      
+
       // Give 3 free credits to new companies
       await addPaidCredits(companyId, 3);
-      
       await db.collection("businesses").doc(companyId).collection("credit_transactions").add({
         type: "welcome_bonus",
         creditsAdded: 3,
         timestamp: new Date().toISOString(),
       });
-      
+
       console.log(`New company ${companyId} initialized with 3 free credits`);
     }
   }
@@ -143,7 +141,6 @@ async function handleMembershipInvalid(membership: any): Promise<void> {
 export async function POST(req: Request) {
   try {
     const secret = process.env.WHOP_WEBHOOK_SECRET;
-    
     if (!secret) {
       console.error("Missing WHOP_WEBHOOK_SECRET");
       return new Response("Server Misconfigured", { status: 500 });
@@ -152,7 +149,7 @@ export async function POST(req: Request) {
     // 1. Read raw body
     const rawBody = await req.text();
     const signature = (await headers()).get("x-whop-signature");
-    
+
     if (!signature) {
       return new Response("Missing Signature", { status: 400 });
     }
@@ -182,20 +179,20 @@ export async function POST(req: Request) {
       case "payment.succeeded":
         await handlePaymentSucceeded(data);
         break;
-        
+
       case "membership.went_valid":
         await handleMembershipValid(data);
         break;
-        
+
       case "membership.went_invalid":
         await handleMembershipInvalid(data);
         break;
-        
+
       case "membership.metadata_updated":
         // Retention offer was applied - could trigger additional logic here
         console.log("Membership metadata updated:", data?.id);
         break;
-        
+
       default:
         // Log unhandled events for debugging
         console.log(`Unhandled webhook action: ${action}`);
