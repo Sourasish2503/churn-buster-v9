@@ -97,7 +97,25 @@ export default async function ExperiencePage({
     // 3. Get Company ID
     const companyId = membership.company.id;
 
-    
+    // 4. Verify membership is still active and has this experience
+const hasExperience = (membership.plan as any)?.experiences?.some(
+  (exp: any) => exp.id === experienceId
+);
+
+if (!hasExperience) {
+  return (
+    <div className="flex items-center justify-center min-h-screen bg-black text-white p-8">
+      <div className="text-center">
+        <h1 className="text-2xl font-bold mb-4">No Access</h1>
+        <p className="text-gray-400">
+          This experience is not part of your membership.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+
 
     // 5. Check if company has credits
     const hasCredits = await hasAvailableCredits(companyId);
