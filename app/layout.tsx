@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google"; // 1. Import Inter instead of Geist
-import "./globals.css";  // Change from "../out.css"
+import "./global.css";  // Change from "../out.css"
 ;
 
 // 2. Configure Inter
