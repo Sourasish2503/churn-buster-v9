@@ -3,6 +3,8 @@ import { whopsdk } from "@/lib/whop";
 import { db } from "@/lib/firebase";
 import { RetentionDashboard } from "@/components/retention-dash";
 
+export const dynamic = 'force-dynamic';
+
 // Fetch company's retention config from Firebase
 async function getCompanyConfig(companyId: string): Promise<{ discountPercent: string }> {
   const defaultConfig = { discountPercent: "30" };
@@ -69,23 +71,7 @@ export default async function ExperiencePage({
       );
     }
 
-    // 2. Check Access
-    const access = await whopsdk.users.checkAccess(experienceId, { id: userId });
-    
-    if (!access.has_access) {
-      return (
-        <div className="flex items-center justify-center min-h-screen bg-black text-white p-8">
-          <div className="text-center">
-            <h1 className="text-2xl font-bold mb-4">No Access</h1>
-            <p className="text-gray-400">
-              You need an active membership to access this experience.
-            </p>
-          </div>
-        </div>
-      );
-    }
-
-    // 3. Get Membership
+    // 2. Get User's Memberships FIRST
     const memberships = await whopsdk.memberships.list({
       user_ids: [userId],
     });
@@ -108,15 +94,31 @@ export default async function ExperiencePage({
       );
     }
 
-    // 4. Get Company ID and check if retention is available
+    // 3. Get Company ID
     const companyId = membership.company.id;
+
+    // 4. Check Access (pass companyId as first param) ✅ FIXED
+    const access = await whopsdk.users.checkAccess(companyId, { 
+      id: userId
+    });
     
-    // Check if company has credits to offer retention
+    if (!access.has_access) {
+      return (
+        <div className="flex items-center justify-center min-h-screen bg-black text-white p-8">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold mb-4">No Access</h1>
+            <p className="text-gray-400">
+              You need an active membership to access this experience.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    // 5. Check if company has credits
     const hasCredits = await hasAvailableCredits(companyId);
     
     if (!hasCredits) {
-      // No credits available - don't show retention offer
-      // In production, you might want to redirect to normal cancellation flow
       return (
         <div className="flex items-center justify-center min-h-screen bg-black text-white p-8">
           <div className="text-center">
@@ -129,17 +131,17 @@ export default async function ExperiencePage({
       );
     }
 
-    // 5. Get User Details
+    // 6. Get User Details
     const user = await whopsdk.users.retrieve(userId);
     const userWithEmail = user as { username?: string; email?: string; id: string };
     const customerName = userWithEmail.username || 
                         userWithEmail.email?.split('@')[0] || 
                         userId.slice(0, 8);
 
-    // 6. Get Company Config (discount percentage)
+    // 7. Get Company Config
     const config = await getCompanyConfig(companyId);
 
-    // 7. Render Dashboard
+    // 8. Render Dashboard
     return (
       <RetentionDashboard
         membershipId={membership.id}

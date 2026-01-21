@@ -2,6 +2,8 @@ import { headers } from "next/headers";
 import { whopsdk } from "@/lib/whop";
 import AdminDashboardClient from "@/components/admin-dashboard-client";
 
+export const dynamic = 'force-dynamic';  // Add at top
+
 export default async function DashboardPage({
   params,
 }: {
