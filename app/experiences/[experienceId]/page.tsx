@@ -71,17 +71,28 @@ export default async function ExperiencePage({
       );
     }
 
-    // 2. Get User's Memberships FIRST
+    // 2. Resolve Experience → Company ✅
+    const experience = await whopsdk.experiences.retrieve(experienceId);
+    const companyId = experience.company.id;
+
+    // 3. Get Memberships (scoped to user + company) ✅
     const memberships = await whopsdk.memberships.list({
       user_ids: [userId],
+      company_id: companyId,
     });
 
-    // Filter by experienceId manually
-    const membership = memberships.data?.find(
-      (m: any) => m.plan?.experiences?.some((exp: any) => exp.id === experienceId)
-    ) || memberships.data?.[0];
+    // 4. Filter active membership for THIS experience ✅
+    const activeMembership = memberships.data?.find((m: any) => {
+      // Check if cancelled or expired
+      if (m.cancelled_at) return false;
+      if (m.expires_at && new Date(m.expires_at) < new Date()) return false;
+      
+      // Check if membership includes this experience
+      const hasExperience = m.plan?.experiences?.some((exp: any) => exp.id === experienceId);
+      return hasExperience;
+    });
     
-    if (!membership) {
+    if (!activeMembership) {
       return (
         <div className="flex items-center justify-center min-h-screen bg-black text-white p-8">
           <div className="text-center">
@@ -93,29 +104,6 @@ export default async function ExperiencePage({
         </div>
       );
     }
-
-    // 3. Get Company ID
-    const companyId = membership.company.id;
-
-    // 4. Verify membership is still active and has this experience
-const hasExperience = (membership.plan as any)?.experiences?.some(
-  (exp: any) => exp.id === experienceId
-);
-
-if (!hasExperience) {
-  return (
-    <div className="flex items-center justify-center min-h-screen bg-black text-white p-8">
-      <div className="text-center">
-        <h1 className="text-2xl font-bold mb-4">No Access</h1>
-        <p className="text-gray-400">
-          This experience is not part of your membership.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-
 
     // 5. Check if company has credits
     const hasCredits = await hasAvailableCredits(companyId);
@@ -146,7 +134,7 @@ if (!hasExperience) {
     // 8. Render Dashboard
     return (
       <RetentionDashboard
-        membershipId={membership.id}
+        membershipId={activeMembership.id}
         companyId={companyId}
         experienceId={experienceId}
         discountPercent={config.discountPercent}
