@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google"; // 1. Import Inter instead of Geist
-import "./global.css";  // Change from "../out.css"
-;
+import { Inter } from "next/font/google";
+import "./globals.css";
 
-// 2. Configure Inter
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({ 
+  subsets: ["latin"],
+  variable: "--font-inter",
+});
 
 export const metadata: Metadata = {
   title: "Churn Buster",
@@ -17,11 +18,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      {/* 3. Apply the Inter class name to the body */}
-      <body className={inter.className}>
-        {children}
-      </body>
+    <html lang="en" className={inter.variable}>
+      <body className={inter.className}>{children}</body>
     </html>
   );
 }

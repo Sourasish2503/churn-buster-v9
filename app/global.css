@@ -4,45 +4,114 @@
 
 @layer base {
   :root {
-    /* --- FORCED DARK MODE (Cyberpunk Base) --- */
-    --background: 224 71% 4%;     
-    --foreground: 210 40% 98%;    
- 
-    /* Glassy Card Colors */
-    --card: 224 71% 4%;           
-    --card-foreground: 210 40% 98%;
- 
-    --popover: 224 71% 4%;
-    --popover-foreground: 210 40% 98%;
- 
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
- 
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
- 
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
- 
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
- 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
- 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    /* --- CYBERPUNK NEON THEME --- */
+    --background: 0 0% 0%; /* Pure black */
+    --foreground: 0 0% 100%; /* Pure white */
+
+    /* Neon Colors */
+    --neon-cyan: 180 100% 50%; /* #00FFFF */
+    --neon-pink: 300 100% 50%; /* #FF00FF */
+    --neon-yellow: 54 100% 50%; /* #FFD700 */
     
-    --radius: 0.5rem;
+    /* Card Colors - Dark with subtle blue tint */
+    --card: 220 20% 8%; /* #0f1419 */
+    --card-foreground: 0 0% 100%;
+    
+    /* Darker nested cards */
+    --card-nested: 220 20% 5%; /* #080a0d */
+    
+    --popover: 220 20% 8%;
+    --popover-foreground: 0 0% 100%;
+
+    --primary: 180 100% 50%; /* Cyan */
+    --primary-foreground: 0 0% 0%;
+
+    --secondary: 220 20% 15%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 220 20% 12%;
+    --muted-foreground: 0 0% 60%;
+
+    --accent: 300 100% 50%; /* Pink */
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 20% 15%;
+    --input: 220 20% 12%;
+    --ring: 180 100% 50%;
+
+    --radius: 0.75rem;
   }
-}
- 
-@layer base {
+
   * {
     @apply border-border;
   }
+
   body {
     @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer utilities {
+  /* Neon glow effects */
+  .glow-cyan {
+    text-shadow: 0 0 10px hsl(var(--neon-cyan)), 
+                 0 0 20px hsl(var(--neon-cyan)), 
+                 0 0 30px hsl(var(--neon-cyan));
+  }
+  
+  .glow-pink {
+    text-shadow: 0 0 10px hsl(var(--neon-pink)), 
+                 0 0 20px hsl(var(--neon-pink)), 
+                 0 0 30px hsl(var(--neon-pink));
+  }
+
+  .glow-yellow {
+    text-shadow: 0 0 10px hsl(var(--neon-yellow)), 
+                 0 0 20px hsl(var(--neon-yellow));
+  }
+
+  /* Card glow borders */
+  .card-glow-cyan {
+    box-shadow: 0 0 20px rgba(0, 255, 255, 0.1),
+                inset 0 0 20px rgba(0, 255, 255, 0.03);
+    border: 1px solid rgba(0, 255, 255, 0.2);
+  }
+
+  .card-glow-pink {
+    box-shadow: 0 0 20px rgba(255, 0, 255, 0.1),
+                inset 0 0 20px rgba(255, 0, 255, 0.03);
+    border: 1px solid rgba(255, 0, 255, 0.2);
+  }
+
+  /* Button hover glow */
+  .btn-glow-cyan:hover {
+    box-shadow: 0 0 30px rgba(0, 255, 255, 0.5),
+                0 0 60px rgba(0, 255, 255, 0.3);
+  }
+
+  /* Neon text colors */
+  .text-neon-cyan {
+    color: hsl(var(--neon-cyan));
+  }
+
+  .text-neon-pink {
+    color: hsl(var(--neon-pink));
+  }
+
+  .text-neon-yellow {
+    color: hsl(var(--neon-yellow));
+  }
+
+  /* Background neon colors */
+  .bg-neon-cyan {
+    background-color: hsl(var(--neon-cyan));
+  }
+
+  .bg-neon-pink {
+    background-color: hsl(var(--neon-pink));
   }
 }

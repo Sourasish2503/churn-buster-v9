@@ -1,13 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { Zap, Shield, Activity, CreditCard, RefreshCw } from "lucide-react";
-import { Card } from "@/components/ui/card";
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Shield, Sparkles, TrendingUp, AlertTriangle, Zap, CreditCard } from "lucide-react";
 import { useWhop } from "@/hooks/useWhop";
 
 interface AdminDashboardClientProps {
-  userId: string;
   companyId: string;
   companyName: string;
 }
@@ -17,266 +16,312 @@ interface Stats {
   saves: number;
   logs: Array<{
     id: string;
-    membershipId: string;
-    discountPercent: string;
     timestamp: string;
+    discountPercent: string;
+    membershipId: string;
   }>;
 }
 
-export default function AdminDashboardClient({ 
-  userId, 
+const creditPacks = [
+  {
+    name: "Starter Pack",
+    description: "Good for testing things out.",
+    credits: 10,
+    price: "$50",
+    packSize: "10",
+    icon: CreditCard,
+  },
+  {
+    name: "Growth Pack",
+    description: "Best for growing communities.",
+    credits: 50,
+    price: "$200",
+    packSize: "50",
+    icon: TrendingUp,
+    popular: true,
+  },
+  {
+    name: "Scale Pack",
+    description: "Maximum retention power.",
+    credits: 200,
+    price: "$700",
+    packSize: "200",
+    icon: Zap,
+  },
+];
+
+export default function AdminDashboardClient({
   companyId,
-  companyName 
+  companyName,
 }: AdminDashboardClientProps) {
-  const { sdk, isInIframe, showToast } = useWhop();
-  const [loading, setLoading] = useState(false);
+  const [stats, setStats] = useState<Stats>({ credits: 0, saves: 0, logs: [] });
   const [statsLoading, setStatsLoading] = useState(true);
   const [discountPercent, setDiscountPercent] = useState("30");
-  const [stats, setStats] = useState<Stats>({ credits: 0, saves: 0, logs: [] });
+  const [saving, setSaving] = useState(false);
+  const { openCheckout, showToast } = useWhop();
 
-  const fetchStats = useCallback(async () => {
-    setStatsLoading(true);
-    try {
-      const res = await fetch(`/api/stats?company_id=${companyId}`);
-      if (res.ok) {
-        const data = await res.json();
-        setStats({ 
-          credits: data.credits || 0, 
-          saves: data.saves || 0,
-          logs: data.logs || [],
-        });
-      }
-    } catch (err) {
-      console.error("Failed to fetch stats:", err);
-    } finally {
-      setStatsLoading(false);
-    }
-  }, [companyId]);
-
-  const fetchConfig = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/config?company_id=${companyId}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.discountPercent) {
-          setDiscountPercent(data.discountPercent);
-        }
-      }
-    } catch (err) {
-      console.error("Failed to fetch config:", err);
-    }
-  }, [companyId]);
-
-  // Load stats and config on mount
   useEffect(() => {
     fetchStats();
     fetchConfig();
-  }, [fetchStats, fetchConfig]);
+  }, [companyId]);
+
+  const fetchStats = async () => {
+    try {
+      const response = await fetch(`/api/admin/stats?company_id=${companyId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setStats(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch stats:", error);
+    } finally {
+      setStatsLoading(false);
+    }
+  };
+
+  const fetchConfig = async () => {
+    try {
+      const response = await fetch(`/api/admin/config?company_id=${companyId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setDiscountPercent(data.discountPercent || "30");
+      }
+    } catch (error) {
+      console.error("Failed to fetch config:", error);
+    }
+  };
 
   const handleSaveConfig = async () => {
-    setLoading(true);
+    setSaving(true);
     try {
-      const res = await fetch("/api/config", {
+      const response = await fetch("/api/admin/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ companyId, discountPercent }),
       });
-      
-      if (res.ok) {
-        showToast("Settings saved successfully!", "success");
+
+      if (response.ok) {
+        showToast("Configuration saved successfully!", "success");
       } else {
-        const error = await res.json();
-        showToast(error.error || "Failed to save settings", "error");
+        showToast("Failed to save configuration", "error");
       }
-    } catch (err) {
-      showToast("Error saving settings", "error");
+    } catch (error) {
+      showToast("Network error", "error");
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
-  const handleBuyCredits = async (packSize: string) => {
+  const handlePurchaseCredits = async (packSize: string) => {
     try {
-      const res = await fetch("/api/create-checkout", {
+      const response = await fetch("/api/admin/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ packSize, companyId }),
       });
-      
-      const data = await res.json();
-      
-      if (res.ok && data.url) {
-        // Use Whop iframe SDK if available, otherwise open in new tab
-        if (sdk?.openUrl) {
-          sdk.openUrl(data.url);
-        } else {
-          window.open(data.url, "_blank");
-        }
+
+      const data = await response.json();
+      if (data.url) {
+        openCheckout(data.url);
       } else {
-        showToast(data.error || "Failed to create checkout", "error");
+        showToast(data.error || "Checkout not available", "error");
       }
-    } catch (err) {
-      showToast("Error creating checkout", "error");
+    } catch (error) {
+      showToast("Failed to create checkout", "error");
     }
   };
 
+  const lowCredits = stats.credits < 5;
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-black via-purple-950 to-black p-8">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-8 flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-white mb-2">
-              Churn Buster Dashboard
-            </h1>
-            <p className="text-gray-400">{companyName}</p>
+    <div className="min-h-screen bg-background p-6 space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+            <Shield className="w-4 h-4" />
+            <span>Admin Control</span>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={fetchStats}
-            disabled={statsLoading}
-            className="border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
-          >
-            <RefreshCw className={`w-4 h-4 mr-2 ${statsLoading ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
+          <h1 className="text-4xl font-bold">
+            Retention <span className="text-neon-cyan glow-cyan">Command</span>
+          </h1>
         </div>
-
-        {/* Stats Cards */}
-        <div className="grid md:grid-cols-3 gap-6 mb-8">
-          <Card className="bg-black/40 border-purple-500/20 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-400 text-sm">Credits Remaining</p>
-                <p className="text-3xl font-bold text-white">
-                  {statsLoading ? "..." : stats.credits}
-                </p>
-              </div>
-              <Zap className="text-yellow-500" size={32} />
-            </div>
-          </Card>
-
-          <Card className="bg-black/40 border-purple-500/20 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-400 text-sm">Members Saved</p>
-                <p className="text-3xl font-bold text-white">
-                  {statsLoading ? "..." : stats.saves}
-                </p>
-              </div>
-              <Shield className="text-green-500" size={32} />
-            </div>
-          </Card>
-
-          <Card className="bg-black/40 border-purple-500/20 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-400 text-sm">Status</p>
-                <p className="text-lg font-bold text-green-500">Active</p>
-              </div>
-              <Activity className="text-blue-500" size={32} />
-            </div>
-          </Card>
+        <div className="text-right">
+          <p className="text-sm text-muted-foreground">System Status</p>
+          <p className={`font-bold ${lowCredits ? 'text-destructive' : 'text-green-500'}`}>
+            {lowCredits ? '⚠️ Paused (No Credits)' : '✓ Active'}
+          </p>
         </div>
+      </div>
 
-        <div className="grid md:grid-cols-2 gap-6">
-          {/* Settings */}
-          <Card className="bg-black/40 border-purple-500/20 p-6">
-            <h2 className="text-xl font-bold text-white mb-4">Retention Offer Settings</h2>
-            
-            <div className="mb-4">
-              <label className="block text-gray-400 text-sm mb-2">
-                Discount Percentage (1-100%)
-              </label>
-              <input
-                type="number"
-                value={discountPercent}
-                onChange={(e) => setDiscountPercent(e.target.value)}
-                className="w-full bg-black/60 border border-purple-500/30 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-purple-500"
-                min="1"
-                max="100"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                This discount will be offered to members trying to cancel.
+      {/* Low Credits Warning */}
+      {lowCredits && (
+        <Card className="bg-neon-yellow/10 border-neon-yellow/30">
+          <CardContent className="p-4 flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-neon-yellow flex-shrink-0" />
+            <div>
+              <p className="font-semibold text-neon-yellow">Low credit balance ({stats.credits})</p>
+              <p className="text-sm text-neon-yellow/80">Top up to keep retention active</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card className="bg-card border-border/30">
+          <CardContent className="p-6">
+            <p className="text-sm text-muted-foreground mb-1">Revenue Protected</p>
+            <p className="text-4xl font-bold text-white">
+              ${statsLoading ? "..." : stats.saves * 99}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card border-border/30">
+          <CardContent className="p-6">
+            <p className="text-sm text-muted-foreground mb-1">Churn Attempts Stopped</p>
+            <p className="text-4xl font-bold text-white">
+              {statsLoading ? "..." : stats.saves}
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card border-border/30">
+          <CardContent className="p-6">
+            <p className="text-sm text-muted-foreground mb-1">Credits Available</p>
+            <p className="text-4xl font-bold text-neon-cyan glow-cyan">
+              {statsLoading ? "..." : stats.credits}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Main Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Offer Configuration */}
+        <Card glow="pink">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-neon-pink/20 flex items-center justify-center">
+                <Sparkles className="w-4 h-4 text-neon-pink" />
+              </div>
+              Offer Configuration
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">Discount Percentage</label>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={discountPercent}
+                  onChange={(e) => setDiscountPercent(e.target.value)}
+                  className="flex-1 bg-card-nested border border-border/30 rounded-lg px-4 py-2 focus:border-neon-pink/50 focus:outline-none"
+                />
+                <span className="flex items-center px-3 text-muted-foreground">%</span>
+              </div>
+              <p className="text-sm text-muted-foreground mt-2">
+                Users will be offered this discount for 3 months to prevent cancellation.
               </p>
             </div>
-
             <Button
               onClick={handleSaveConfig}
-              disabled={loading}
-              className="w-full bg-purple-600 hover:bg-purple-700"
+              disabled={saving}
+              variant="outline"
+              className="w-full"
             >
-              {loading ? "Saving..." : "Save Settings"}
+              {saving ? "Saving..." : "💾 Save Configuration"}
             </Button>
-          </Card>
+          </CardContent>
+        </Card>
 
-          {/* Buy Credits */}
-          <Card className="bg-black/40 border-purple-500/20 p-6">
-            <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-              <CreditCard className="w-5 h-5" />
-              Buy Credits
-            </h2>
-            
-            <div className="space-y-3">
-              <Button
-                onClick={() => handleBuyCredits("10")}
-                variant="outline"
-                className="w-full justify-between border-purple-500/30 text-white hover:bg-purple-500/10"
-              >
-                <span>10 Credits</span>
-                <span className="text-purple-400">$50</span>
-              </Button>
-              
-              <Button
-                onClick={() => handleBuyCredits("50")}
-                variant="outline"
-                className="w-full justify-between border-purple-500/30 text-white hover:bg-purple-500/10"
-              >
-                <span>50 Credits</span>
-                <span className="text-purple-400">$200</span>
-              </Button>
-              
-              <Button
-                onClick={() => handleBuyCredits("200")}
-                variant="outline"
-                className="w-full justify-between border-purple-500/30 text-white hover:bg-purple-500/10"
-              >
-                <span>200 Credits</span>
-                <span className="text-purple-400">$700</span>
-              </Button>
-            </div>
-            
-            <p className="text-xs text-gray-500 mt-4">
-              1 credit = 1 retention offer shown to a canceling member
-            </p>
-          </Card>
-        </div>
-
-        {/* Recent Activity */}
-        {stats.logs.length > 0 && (
-          <Card className="bg-black/40 border-purple-500/20 p-6 mt-6">
-            <h2 className="text-xl font-bold text-white mb-4">Recent Saves</h2>
-            <div className="space-y-2">
-              {stats.logs.slice(0, 5).map((log) => (
-                <div 
-                  key={log.id} 
-                  className="flex items-center justify-between py-2 border-b border-purple-500/10 last:border-0"
-                >
-                  <div>
-                    <p className="text-white text-sm">
+        {/* Live Activity Feed */}
+        <Card glow="cyan">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-neon-cyan/20 flex items-center justify-center">
+                <Shield className="w-4 h-4 text-neon-cyan" />
+              </div>
+              Live Activity Feed
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {stats.logs.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8">No activity recorded yet.</p>
+            ) : (
+              <div className="space-y-3 max-h-64 overflow-y-auto">
+                {stats.logs.map((log) => (
+                  <div
+                    key={log.id}
+                    className="p-3 bg-card-nested rounded-lg border border-border/30"
+                  >
+                    <p className="font-medium">
                       Member saved with {log.discountPercent}% discount
                     </p>
-                    <p className="text-gray-500 text-xs">
+                    <p className="text-sm text-muted-foreground">
                       {new Date(log.timestamp).toLocaleDateString()}
                     </p>
                   </div>
-                  <Shield className="text-green-500 w-4 h-4" />
-                </div>
-              ))}
-            </div>
-          </Card>
-        )}
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Credit Packs */}
+      <div>
+        <h2 className="text-2xl font-bold mb-4 text-center">Top Up Credits</h2>
+        <p className="text-center text-muted-foreground mb-6">
+          1 credit = 1 retention offer shown to a canceling member
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {creditPacks.map((pack) => {
+            const Icon = pack.icon;
+            return (
+              <Card
+                key={pack.packSize}
+                glow={pack.popular ? "cyan" : "none"}
+                className="relative hover:scale-105 transition-transform"
+              >
+                {pack.popular && (
+                  <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                    <span className="bg-neon-cyan text-black text-xs font-bold px-3 py-1 rounded-full">
+                      MOST POPULAR
+                    </span>
+                  </div>
+                )}
+                <CardContent className="p-6 space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-12 h-12 rounded-lg ${pack.popular ? 'bg-neon-cyan/20' : 'bg-card-nested'} flex items-center justify-center`}>
+                      <Icon className={`w-6 h-6 ${pack.popular ? 'text-neon-cyan' : 'text-muted-foreground'}`} />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-lg">{pack.name}</h3>
+                      <p className={`text-sm ${pack.popular ? 'text-neon-cyan' : 'text-muted-foreground'}`}>
+                        {pack.description}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-3xl font-bold">{pack.price}</p>
+                    <p className="text-muted-foreground">/ {pack.credits} credits</p>
+                  </div>
+                  <Button
+                    variant={pack.popular ? "default" : "outline"}
+                    className="w-full"
+                    onClick={() => handlePurchaseCredits(pack.packSize)}
+                  >
+                    Purchase
+                  </Button>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
