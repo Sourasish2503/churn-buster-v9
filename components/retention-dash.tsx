@@ -56,7 +56,7 @@ export function RetentionDashboard({
     setErrorMessage(null);
 
     try {
-      const response = await fetch("/api/retention/claim", {
+      const response = await fetch("/api/claim-offer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

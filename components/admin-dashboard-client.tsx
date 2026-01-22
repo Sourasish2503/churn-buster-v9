@@ -81,7 +81,7 @@ export default function AdminDashboardClient({
   ------------------------------ */
   const fetchStats = async () => {
     try {
-      const response = await fetch(`/api/admin/stats?company_id=${companyId}`);
+      const response = await fetch(`/api/stats?company_id=${companyId}`);
       if (response.ok) {
         const data = await response.json();
         setStats(data);
@@ -98,7 +98,7 @@ export default function AdminDashboardClient({
   ------------------------------ */
   const fetchConfig = async () => {
     try {
-      const response = await fetch(`/api/admin/config?company_id=${companyId}`);
+      const response = await fetch(`/api/config?company_id=${companyId}`);
       if (response.ok) {
         const data = await response.json();
         setDiscountPercent(data.discountPercent || "30");
@@ -114,7 +114,7 @@ export default function AdminDashboardClient({
   const handleSaveConfig = async () => {
     setSaving(true);
     try {
-      const response = await fetch("/api/admin/config", {
+      const response = await fetch("/api/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ companyId, discountPercent }),
