@@ -1,7 +1,9 @@
+// ✅ CORRECT imports based on your structure
 import { headers } from "next/headers";
 import { whopsdk } from "@/lib/whop";
 import { db } from "@/lib/firebase";
 import { RetentionDashboard } from "@/components/retention-dash";
+
 
 export const dynamic = 'force-dynamic';
 
