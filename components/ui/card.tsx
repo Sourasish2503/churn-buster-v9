@@ -8,10 +8,11 @@ const Card = React.forwardRef<
   <div
     ref={ref}
     className={cn(
-      "rounded-xl bg-card text-card-foreground backdrop-blur-sm",
-      glow === "cyan" && "card-glow-cyan",
-      glow === "pink" && "card-glow-pink",
-      glow === "none" && "border border-border/50",
+      "rounded-lg border bg-card text-card-foreground shadow-sm transition-all duration-300",
+      // Glow Styles
+      glow === "cyan" && "border-cyan-500/50 shadow-[0_0_20px_rgba(0,243,255,0.15)]",
+      glow === "pink" && "border-pink-500/50 shadow-[0_0_20px_rgba(255,0,255,0.15)]",
+      glow === "none" && "border-border",
       className
     )}
     {...props}
@@ -32,13 +33,13 @@ const CardHeader = React.forwardRef<
 CardHeader.displayName = "CardHeader"
 
 const CardTitle = React.forwardRef<
-  HTMLHeadingElement,
+  HTMLParagraphElement,
   React.HTMLAttributes<HTMLHeadingElement>
 >(({ className, ...props }, ref) => (
   <h3
     ref={ref}
     className={cn(
-      "text-2xl font-bold leading-none tracking-tight",
+      "text-2xl font-semibold leading-none tracking-tight",
       className
     )}
     {...props}

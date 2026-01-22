@@ -4,114 +4,76 @@
 
 @layer base {
   :root {
-    /* --- CYBERPUNK NEON THEME --- */
-    --background: 0 0% 0%; /* Pure black */
-    --foreground: 0 0% 100%; /* Pure white */
-
-    /* Neon Colors */
-    --neon-cyan: 180 100% 50%; /* #00FFFF */
-    --neon-pink: 300 100% 50%; /* #FF00FF */
-    --neon-yellow: 54 100% 50%; /* #FFD700 */
+    /* --- CYBERPUNK THEME --- */
+    --background: 240 10% 4%; /* Deep Void Black */
+    --foreground: 0 0% 98%;
     
-    /* Card Colors - Dark with subtle blue tint */
-    --card: 220 20% 8%; /* #0f1419 */
-    --card-foreground: 0 0% 100%;
-    
-    /* Darker nested cards */
-    --card-nested: 220 20% 5%; /* #080a0d */
-    
-    --popover: 220 20% 8%;
-    --popover-foreground: 0 0% 100%;
+    /* Neon Palette */
+    --neon-cyan: 180 100% 50%;   /* #00FFFF */
+    --neon-pink: 300 100% 50%;   /* #FF00FF */
+    --neon-green: 120 100% 50%;  /* #00FF00 */
+    --neon-yellow: 60 100% 50%;  /* #FFFF00 */
 
-    --primary: 180 100% 50%; /* Cyan */
-    --primary-foreground: 0 0% 0%;
-
-    --secondary: 220 20% 15%;
-    --secondary-foreground: 0 0% 100%;
-
-    --muted: 220 20% 12%;
-    --muted-foreground: 0 0% 60%;
-
-    --accent: 300 100% 50%; /* Pink */
-    --accent-foreground: 0 0% 100%;
-
-    --destructive: 0 70% 50%;
-    --destructive-foreground: 0 0% 100%;
-
-    --border: 220 20% 15%;
-    --input: 220 20% 12%;
+    /* UI Colors */
+    --card: 240 10% 6%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 10% 6%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 180 100% 50%;
+    --primary-foreground: 240 10% 4%;
+    --secondary: 240 10% 12%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 10% 12%;
+    --muted-foreground: 240 5% 65%;
+    --accent: 240 10% 12%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 10% 12%;
+    --input: 240 10% 12%;
     --ring: 180 100% 50%;
-
     --radius: 0.75rem;
   }
-
-  * {
-    @apply border-border;
-  }
-
+ 
   body {
-    @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    @apply bg-background text-foreground antialiased selection:bg-cyan-500/30 selection:text-cyan-200;
+    /* Subtle background grid/glow */
+    background-image: 
+      radial-gradient(circle at 50% 0%, rgba(0, 243, 255, 0.1) 0%, transparent 50%),
+      radial-gradient(circle at 100% 0%, rgba(255, 0, 255, 0.05) 0%, transparent 50%);
   }
 }
 
 @layer utilities {
-  /* Neon glow effects */
-  .glow-cyan {
-    text-shadow: 0 0 10px hsl(var(--neon-cyan)), 
-                 0 0 20px hsl(var(--neon-cyan)), 
-                 0 0 30px hsl(var(--neon-cyan));
+  /* Text Glows */
+  .text-neon-cyan { color: hsl(var(--neon-cyan)); text-shadow: 0 0 10px rgba(0, 243, 255, 0.5); }
+  .text-neon-pink { color: hsl(var(--neon-pink)); text-shadow: 0 0 10px rgba(255, 0, 255, 0.5); }
+  
+  /* Border Glows */
+  .border-neon-cyan { border-color: hsl(var(--neon-cyan)); box-shadow: 0 0 10px rgba(0, 243, 255, 0.2); }
+  .border-neon-pink { border-color: hsl(var(--neon-pink)); box-shadow: 0 0 10px rgba(255, 0, 255, 0.2); }
+
+  /* Glassmorphism Panel */
+  .glass-panel {
+    @apply bg-white/5 backdrop-blur-xl border border-white/10 shadow-2xl;
   }
   
-  .glow-pink {
-    text-shadow: 0 0 10px hsl(var(--neon-pink)), 
-                 0 0 20px hsl(var(--neon-pink)), 
-                 0 0 30px hsl(var(--neon-pink));
+  /* Animations */
+  .animate-slide-up {
+    animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+  
+  .animate-fade-in {
+    animation: fadeIn 0.5s ease-out forwards;
   }
 
-  .glow-yellow {
-    text-shadow: 0 0 10px hsl(var(--neon-yellow)), 
-                 0 0 20px hsl(var(--neon-yellow));
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 
-  /* Card glow borders */
-  .card-glow-cyan {
-    box-shadow: 0 0 20px rgba(0, 255, 255, 0.1),
-                inset 0 0 20px rgba(0, 255, 255, 0.03);
-    border: 1px solid rgba(0, 255, 255, 0.2);
-  }
-
-  .card-glow-pink {
-    box-shadow: 0 0 20px rgba(255, 0, 255, 0.1),
-                inset 0 0 20px rgba(255, 0, 255, 0.03);
-    border: 1px solid rgba(255, 0, 255, 0.2);
-  }
-
-  /* Button hover glow */
-  .btn-glow-cyan:hover {
-    box-shadow: 0 0 30px rgba(0, 255, 255, 0.5),
-                0 0 60px rgba(0, 255, 255, 0.3);
-  }
-
-  /* Neon text colors */
-  .text-neon-cyan {
-    color: hsl(var(--neon-cyan));
-  }
-
-  .text-neon-pink {
-    color: hsl(var(--neon-pink));
-  }
-
-  .text-neon-yellow {
-    color: hsl(var(--neon-yellow));
-  }
-
-  /* Background neon colors */
-  .bg-neon-cyan {
-    background-color: hsl(var(--neon-cyan));
-  }
-
-  .bg-neon-pink {
-    background-color: hsl(var(--neon-pink));
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
 }
