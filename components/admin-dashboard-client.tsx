@@ -3,8 +3,7 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Shield, Sparkles, TrendingUp, AlertTriangle, Zap, CreditCard } from "lucide-react";
-import { useWhop } from "@/hooks/useWhop";
+import { Shield, Sparkles, TrendingUp, AlertTriangle, Zap, CreditCard, Loader2 } from "lucide-react";
 
 interface AdminDashboardClientProps {
   companyId: string;
@@ -58,7 +57,7 @@ export default function AdminDashboardClient({
   const [statsLoading, setStatsLoading] = useState(true);
   const [discountPercent, setDiscountPercent] = useState("30");
   const [saving, setSaving] = useState(false);
-  const { openCheckout, showToast } = useWhop();
+  const [purchasingPack, setPurchasingPack] = useState<string | null>(null);
 
   useEffect(() => {
     fetchStats();
@@ -101,18 +100,22 @@ export default function AdminDashboardClient({
       });
 
       if (response.ok) {
-        showToast("Configuration saved successfully!", "success");
+        alert("Configuration saved successfully!");
       } else {
-        showToast("Failed to save configuration", "error");
+        const data = await response.json();
+        alert(data.error || "Failed to save configuration");
       }
     } catch (error) {
-      showToast("Network error", "error");
+      alert("Network error");
     } finally {
       setSaving(false);
     }
   };
 
+  // ✅ FIXED: Proper checkout creation and redirection
   const handlePurchaseCredits = async (packSize: string) => {
+    setPurchasingPack(packSize);
+    
     try {
       const response = await fetch("/api/admin/checkout", {
         method: "POST",
@@ -121,14 +124,22 @@ export default function AdminDashboardClient({
       });
 
       const data = await response.json();
-      if (data.url) {
-        openCheckout(data.url);
+
+      if (response.ok && data.url) {
+        console.log("Redirecting to checkout:", data.url);
+        // ✅ THIS IS CRITICAL - Actually redirect to Whop checkout
+        window.location.href = data.url;
       } else {
-        showToast(data.error || "Checkout not available", "error");
+        console.error("Checkout failed:", data);
+        alert(data.error || "Failed to create checkout");
+        setPurchasingPack(null);
       }
     } catch (error) {
-      showToast("Failed to create checkout", "error");
+      console.error("Network error:", error);
+      alert("Failed to create checkout - network error");
+      setPurchasingPack(null);
     }
+    // Note: Don't reset purchasingPack here - let the redirect happen
   };
 
   const lowCredits = stats.credits < 5;
@@ -136,7 +147,7 @@ export default function AdminDashboardClient({
   return (
     <div className="min-h-screen bg-background p-6 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
             <Shield className="w-4 h-4" />
@@ -219,7 +230,7 @@ export default function AdminDashboardClient({
                   max="100"
                   value={discountPercent}
                   onChange={(e) => setDiscountPercent(e.target.value)}
-                  className="flex-1 bg-card-nested border border-border/30 rounded-lg px-4 py-2 focus:border-neon-pink/50 focus:outline-none"
+                  className="flex-1 bg-card-nested border border-border/30 rounded-lg px-4 py-2 focus:border-neon-pink/50 focus:outline-none text-white"
                 />
                 <span className="flex items-center px-3 text-muted-foreground">%</span>
               </div>
@@ -233,7 +244,14 @@ export default function AdminDashboardClient({
               variant="outline"
               className="w-full"
             >
-              {saving ? "Saving..." : "💾 Save Configuration"}
+              {saving ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "💾 Save Configuration"
+              )}
             </Button>
           </CardContent>
         </Card>
@@ -281,6 +299,8 @@ export default function AdminDashboardClient({
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {creditPacks.map((pack) => {
             const Icon = pack.icon;
+            const isPurchasing = purchasingPack === pack.packSize;
+            
             return (
               <Card
                 key={pack.packSize}
@@ -314,8 +334,16 @@ export default function AdminDashboardClient({
                     variant={pack.popular ? "default" : "outline"}
                     className="w-full"
                     onClick={() => handlePurchaseCredits(pack.packSize)}
+                    disabled={isPurchasing}
                   >
-                    Purchase
+                    {isPurchasing ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Opening Checkout...
+                      </>
+                    ) : (
+                      "Purchase"
+                    )}
                   </Button>
                 </CardContent>
               </Card>
