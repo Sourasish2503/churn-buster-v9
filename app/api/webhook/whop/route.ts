@@ -3,8 +3,7 @@ import crypto from "crypto";
 import { addPaidCredits } from "@/lib/credits";
 import { db } from "@/lib/firebase";
 
-// ✅ HARDCODED CREDIT TIERS - amount in cents -> credits
-// This maps Whop payment amounts to credit values
+// Credit tiers amount in cents -> credits
 const CREDIT_TIERS: Record<number, number> = {
   5000: 10,   // $50 = 10 credits
   20000: 50,  // $200 = 50 credits
@@ -39,6 +38,68 @@ function verifySignature(rawBody: string, signature: string, secret: string): bo
   return crypto.timingSafeEqual(sigBuffer, expectedBuffer);
 }
 
+// ✅ IDEMPOTENCY: Check if payment already processed
+async function isPaymentAlreadyProcessed(companyId: string, paymentId: string): Promise<boolean> {
+  if (!db) return false;
+
+  try {
+    const existing = await db
+      .collection("businesses")
+      .doc(companyId)
+      .collection("credit_transactions")
+      .where("paymentId", "==", paymentId)
+      .limit(1)
+      .get();
+
+    return !existing.empty;
+  } catch (error) {
+    console.error("Error checking payment idempotency:", error);
+    return false; // Fail open to prevent blocking legitimate payments
+  }
+}
+
+// ✅ IDEMPOTENCY: Check if membership event already processed
+async function isMembershipEventProcessed(companyId: string, eventType: string, membershipId: string): Promise<boolean> {
+  if (!db) return false;
+
+  try {
+    const existing = await db
+      .collection("businesses")
+      .doc(companyId)
+      .collection("membership_events")
+      .where("membershipId", "==", membershipId)
+      .where("eventType", "==", eventType)
+      .limit(1)
+      .get();
+
+    return !existing.empty;
+  } catch (error) {
+    console.error("Error checking membership event idempotency:", error);
+    return false;
+  }
+}
+
+// ✅ IDEMPOTENCY: Log membership event to prevent duplicates
+async function logMembershipEvent(companyId: string, eventType: string, membershipId: string, data: any): Promise<void> {
+  if (!db) return;
+
+  try {
+    await db
+      .collection("businesses")
+      .doc(companyId)
+      .collection("membership_events")
+      .add({
+        membershipId,
+        eventType,
+        timestamp: new Date().toISOString(),
+        data,
+        processedAt: new Date().toISOString(),
+      });
+  } catch (error) {
+    console.error("Error logging membership event:", error);
+  }
+}
+
 // Handle payment.succeeded event
 async function handlePaymentSucceeded(payment: any): Promise<void> {
   const companyId = payment?.company_id;
@@ -56,25 +117,39 @@ async function handlePaymentSucceeded(payment: any): Promise<void> {
     return;
   }
 
+  // ✅ IDEMPOTENCY CHECK: Prevent duplicate payment processing
+  const alreadyProcessed = await isPaymentAlreadyProcessed(companyId, paymentId);
+  if (alreadyProcessed) {
+    console.log(`⏭️  Duplicate payment webhook ignored: ${paymentId} for company ${companyId}`);
+    return;
+  }
+
   const creditsToAdd = calculateCredits(amount);
-  console.log(`Payment received: company=${companyId}, amount=$${amount / 100}, credits=${creditsToAdd}`);
+  console.log(`Payment received: company=${companyId}, amount=$${amount / 100}, credits=${creditsToAdd}, paymentId=${paymentId}`);
 
   if (creditsToAdd > 0) {
+    // Add credits
     await addPaidCredits(companyId, creditsToAdd);
 
-    // Log the transaction for audit trail
+    // ✅ Log the transaction (provides idempotency for next webhook)
     if (db) {
       await db.collection("businesses").doc(companyId).collection("credit_transactions").add({
         type: "purchase",
-        paymentId,
+        paymentId, // ✅ Used for idempotency check
         amountCents: amount,
         creditsAdded: creditsToAdd,
         packSize: metadata.pack_size || null,
         timestamp: new Date().toISOString(),
+        webhookProcessedAt: new Date().toISOString(),
       });
+
+      // ✅ Verify the credit was actually added (optional validation)
+      const creditDoc = await db.collection("credits").doc(companyId).get();
+      const currentBalance = creditDoc.data()?.balance || 0;
+      console.log(`✅ Credit verification: Company ${companyId} now has ${currentBalance} credits (added ${creditsToAdd})`);
     }
 
-    console.log(`Added ${creditsToAdd} credits to company ${companyId}`);
+    console.log(`✅ Added ${creditsToAdd} credits to company ${companyId}`);
   } else {
     console.warn(`Payment amount too low for credits: company=${companyId}, amount=$${amount / 100}`);
   }
@@ -87,6 +162,13 @@ async function handleMembershipValid(membership: any): Promise<void> {
 
   if (!companyId) {
     console.log("Membership valid event without company_id");
+    return;
+  }
+
+  // ✅ IDEMPOTENCY CHECK: Prevent duplicate welcome bonus
+  const alreadyProcessed = await isMembershipEventProcessed(companyId, "went_valid", membershipId);
+  if (alreadyProcessed) {
+    console.log(`⏭️  Duplicate membership.went_valid webhook ignored: ${membershipId}`);
     return;
   }
 
@@ -106,22 +188,38 @@ async function handleMembershipValid(membership: any): Promise<void> {
 
       // Give 3 free credits to new companies
       await addPaidCredits(companyId, 3);
+      
+      // Log welcome bonus transaction
       await db.collection("businesses").doc(companyId).collection("credit_transactions").add({
         type: "welcome_bonus",
         creditsAdded: 3,
         timestamp: new Date().toISOString(),
+        membershipId, // ✅ Track which membership triggered this
       });
 
-      console.log(`New company ${companyId} initialized with 3 free credits`);
+      console.log(`✅ New company ${companyId} initialized with 3 free credits`);
+    } else {
+      console.log(`Company ${companyId} already exists, skipping welcome bonus`);
     }
+
+    // ✅ Log this event to prevent duplicate processing
+    await logMembershipEvent(companyId, "went_valid", membershipId, membership);
   }
 }
 
 // Handle membership.went_invalid event (app uninstalled or expired)
 async function handleMembershipInvalid(membership: any): Promise<void> {
   const companyId = membership?.company?.id;
+  const membershipId = membership?.id;
 
   if (!companyId) {
+    return;
+  }
+
+  // ✅ IDEMPOTENCY CHECK: Prevent duplicate deactivation
+  const alreadyProcessed = await isMembershipEventProcessed(companyId, "went_invalid", membershipId);
+  if (alreadyProcessed) {
+    console.log(`⏭️  Duplicate membership.went_invalid webhook ignored: ${membershipId}`);
     return;
   }
 
@@ -135,6 +233,9 @@ async function handleMembershipInvalid(membership: any): Promise<void> {
     }).catch(() => {
       // Document might not exist
     });
+
+    // ✅ Log this event
+    await logMembershipEvent(companyId, "went_invalid", membershipId, membership);
   }
 }
 
@@ -174,7 +275,7 @@ export async function POST(req: Request) {
 
     console.log(`Webhook received: ${action}`);
 
-    // 4. Route to appropriate handler
+    // 4. Route to appropriate handler (all with idempotency)
     switch (action) {
       case "payment.succeeded":
         await handlePaymentSucceeded(data);
