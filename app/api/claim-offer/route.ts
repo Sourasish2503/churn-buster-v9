@@ -9,54 +9,77 @@ export async function POST(req: Request) {
   let companyId: string | null = null;
 
   try {
-    const { membershipId, companyId: reqCompanyId, experienceId, discountPercent } = await req.json();
+    // ✅ 1. Parse request (cancellationReason added safely)
+    const {
+      membershipId,
+      companyId: reqCompanyId,
+      experienceId,
+      discountPercent,
+      cancellationReason,
+    } = await req.json();
+
     companyId = reqCompanyId;
 
-    // 1. Basic Validation
+    // 2. Basic Validation
     if (!membershipId || !companyId || !discountPercent) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Missing required fields" },
+        { status: 400 }
+      );
     }
 
-    // Validate discount percent
     const discount = parseInt(discountPercent, 10);
     if (isNaN(discount) || discount < 1 || discount > 100) {
-      return NextResponse.json({ error: "Invalid discount percent (1-100)" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Invalid discount percent (1-100)" },
+        { status: 400 }
+      );
     }
 
-    // 2. Verify User (JWT Token)
+    // 3. Verify User (JWT)
     const { userId } = await whopsdk.verifyUserToken(await headers());
-    
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // 3. Ownership Check
+    // 4. Ownership Check
     let membership;
     try {
       membership = await whopsdk.memberships.retrieve(membershipId);
-      
+
       if (membership.user?.id !== userId) {
-        console.warn(`Security Alert: User ${userId} tried to modify membership ${membershipId}`);
+        console.warn(
+          `Security Alert: User ${userId} tried to modify membership ${membershipId}`
+        );
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
     } catch (err) {
       console.error("Membership lookup failed:", err);
-      return NextResponse.json({ error: "Invalid Membership ID" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Invalid Membership ID" },
+        { status: 404 }
+      );
     }
 
-    // 4. Check if offer already claimed
+    // 5. Prevent duplicate claims
     if (membership.metadata?.retention_offer_claimed === "true") {
-      return NextResponse.json({ error: "Offer already claimed for this membership" }, { status: 409 });
+      return NextResponse.json(
+        { error: "Offer already claimed for this membership" },
+        { status: 409 }
+      );
     }
 
-    // 5. Deduct Credit
+    // 6. Deduct Credit
     const hasCredits = await useCredit(companyId);
     if (!hasCredits) {
-      return NextResponse.json({ error: "No credits remaining" }, { status: 402 });
+      return NextResponse.json(
+        { error: "No credits remaining" },
+        { status: 402 }
+      );
     }
     creditDeducted = true;
 
-    // 6. Apply Discount - wrapped in try/catch for rollback
+    // 7. Apply metadata on Whop (rollback-safe)
     try {
       await whopsdk.memberships.update(membershipId, {
         metadata: {
@@ -64,50 +87,56 @@ export async function POST(req: Request) {
           retention_discount_percent: discountPercent.toString(),
           retention_date: new Date().toISOString(),
           retention_experience_id: experienceId || "",
-        }
+          retention_cancellation_reason: cancellationReason || "",
+        },
       });
     } catch (whopError) {
-      // Rollback credit if Whop API fails
       console.error("Whop API failed, rolling back credit:", whopError);
       await refundCredit(companyId);
       creditDeducted = false;
-      throw new Error("Failed to apply discount. Credit has been refunded.");
+      throw new Error("Failed to apply discount. Credit refunded.");
     }
 
-    // 7. Log to Firebase
+    // 8. Log to Firebase (cancellationReason included)
     if (db) {
-      await db.collection("businesses").doc(companyId).collection("saves").add({
-        membershipId,
-        experienceId: experienceId || null,
-        discountPercent: discountPercent.toString(),
-        timestamp: new Date().toISOString(),
-        savedByUserId: userId,
-        cost: 1,
-      });
+      await db
+        .collection("businesses")
+        .doc(companyId)
+        .collection("saves")
+        .add({
+          membershipId,
+          experienceId: experienceId || null,
+          discountPercent: discountPercent.toString(),
+          timestamp: new Date().toISOString(),
+          claimedAt: new Date().toISOString(),
+          savedByUserId: userId,
+          cost: 1,
+          cancellationReason: cancellationReason || null, // ✅ NEW FIELD
+        });
     }
 
     console.log(`Retention offer applied for membership ${membershipId}`);
 
-    return NextResponse.json({ 
+    return NextResponse.json({
       success: true,
-      message: `${discountPercent}% discount recorded. Creator will apply manually.`
+      message: `${discountPercent}% discount recorded successfully.`,
     });
-
   } catch (error: any) {
     console.error("Claim Error:", error);
-    
-    // Rollback credit if it was deducted but we failed later
+
+    // Rollback credit if needed
     if (creditDeducted && companyId) {
       try {
         await refundCredit(companyId);
-        console.log(`Credit refunded for company ${companyId} due to error`);
+        console.log(`Credit refunded for company ${companyId}`);
       } catch (refundError) {
         console.error("Failed to refund credit:", refundError);
       }
     }
-    
-    return NextResponse.json({ 
-      error: error.message || "Internal Server Error" 
-    }, { status: 500 });
+
+    return NextResponse.json(
+      { error: error.message || "Internal Server Error" },
+      { status: 500 }
+    );
   }
 }
