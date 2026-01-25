@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Shield, TrendingDown, Heart, Clock, Sparkles, CheckCircle2 } from "lucide-react";
+import { Shield, TrendingDown, Heart, Clock, Sparkles, CheckCircle2, DollarSign, UserX, Wrench, Coffee } from "lucide-react";
 
 interface RetentionDashboardProps {
   experienceId: string;
@@ -19,6 +19,14 @@ interface RetentionDashboardProps {
   };
 }
 
+// ✅ NEW: Survey reasons
+const CANCELLATION_REASONS = [
+  { id: "expensive", label: "Too expensive", icon: DollarSign },
+  { id: "not_using", label: "Not using it enough", icon: UserX },
+  { id: "missing_features", label: "Missing features", icon: Wrench },
+  { id: "need_break", label: "Need a break", icon: Coffee },
+];
+
 export function RetentionDashboard({
   experienceId,
   membershipId,
@@ -27,17 +35,27 @@ export function RetentionDashboard({
   isDemo = false,
   demoData,
 }: RetentionDashboardProps) {
-  const [step, setStep] = useState<"offer" | "success">("offer");
+  // ✅ NEW: Add survey step
+  const [step, setStep] = useState<"survey" | "offer" | "success">("survey");
+  const [selectedReason, setSelectedReason] = useState<string | null>(null);
   const [claiming, setClaiming] = useState(false);
 
-  // ✅ FIXED: Use demo data if in demo mode, with fallback values
   const effectiveMembershipId = isDemo ? demoData?.membershipId || "demo_membership_123" : membershipId || "";
   const effectiveCompanyId = isDemo ? demoData?.companyId || "demo_company_123" : companyId || "";
   const effectiveDiscount = isDemo ? demoData?.discountPercent || "80" : discountPercent || "30";
   const userName = isDemo ? demoData?.userName || "Demo User" : "there";
 
+  // ✅ NEW: Handle survey submission
+  const handleSurveySubmit = () => {
+    if (!selectedReason) {
+      alert("Please select a reason");
+      return;
+    }
+    // Move to offer step
+    setStep("offer");
+  };
+
   const handleClaim = async () => {
-    // ✅ DEMO MODE - Just show success without API call
     if (isDemo) {
       setClaiming(true);
       setTimeout(() => {
@@ -47,7 +65,6 @@ export function RetentionDashboard({
       return;
     }
 
-    // ✅ PRODUCTION MODE - Make actual API call
     setClaiming(true);
     try {
       const response = await fetch("/api/claim-offer", {
@@ -58,6 +75,7 @@ export function RetentionDashboard({
           companyId: effectiveCompanyId,
           experienceId,
           discountPercent: effectiveDiscount,
+          cancellationReason: selectedReason, // ✅ Include survey data
         }),
       });
 
@@ -76,11 +94,10 @@ export function RetentionDashboard({
     }
   };
 
-  // ✅ DEMO MODE BANNER
+  // ✅ DEMO MODE
   if (isDemo) {
     return (
       <div className="min-h-screen bg-background relative">
-        {/* Demo Mode Banner */}
         <div className="absolute top-0 left-0 right-0 bg-neon-yellow/20 border-b border-neon-yellow/30 py-3 px-4 z-50">
           <div className="max-w-4xl mx-auto text-center">
             <p className="text-sm font-semibold text-neon-yellow">
@@ -89,18 +106,24 @@ export function RetentionDashboard({
           </div>
         </div>
 
-        {/* Main Content (offset for banner) */}
         <div className="pt-16">
-          {step === "offer" ? (
+          {step === "survey" && (
+            <SurveyView
+              reasons={CANCELLATION_REASONS}
+              selectedReason={selectedReason}
+              onSelectReason={setSelectedReason}
+              onSubmit={handleSurveySubmit}
+            />
+          )}
+          {step === "offer" && (
             <OfferView
               discount={effectiveDiscount}
               userName={userName}
               onClaim={handleClaim}
               claiming={claiming}
             />
-          ) : (
-            <SuccessView discount={effectiveDiscount} />
           )}
+          {step === "success" && <SuccessView discount={effectiveDiscount} />}
         </div>
       </div>
     );
@@ -109,21 +132,104 @@ export function RetentionDashboard({
   // ✅ PRODUCTION MODE
   return (
     <div className="min-h-screen bg-background">
-      {step === "offer" ? (
+      {step === "survey" && (
+        <SurveyView
+          reasons={CANCELLATION_REASONS}
+          selectedReason={selectedReason}
+          onSelectReason={setSelectedReason}
+          onSubmit={handleSurveySubmit}
+        />
+      )}
+      {step === "offer" && (
         <OfferView
           discount={effectiveDiscount}
           userName={userName}
           onClaim={handleClaim}
           claiming={claiming}
         />
-      ) : (
-        <SuccessView discount={effectiveDiscount} />
       )}
+      {step === "success" && <SuccessView discount={effectiveDiscount} />}
     </div>
   );
 }
 
-// ✅ OFFER VIEW COMPONENT
+// ✅ NEW: SURVEY VIEW COMPONENT
+function SurveyView({
+  reasons,
+  selectedReason,
+  onSelectReason,
+  onSubmit,
+}: {
+  reasons: Array<{ id: string; label: string; icon: any }>;
+  selectedReason: string | null;
+  onSelectReason: (id: string) => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <Card className="max-w-2xl w-full">
+        <CardHeader className="text-center space-y-4 pb-6">
+          <div>
+            <p className="text-sm text-muted-foreground mb-2">Before you go...</p>
+            <CardTitle className="text-4xl font-bold">
+              Wait, <span className="text-neon-pink glow-pink">before you go...</span>
+            </CardTitle>
+          </div>
+        </CardHeader>
+
+        <CardContent className="space-y-6">
+          <div className="text-center mb-6">
+            <h3 className="text-xl font-semibold mb-2">What's making you cancel?</h3>
+            <p className="text-muted-foreground text-sm">
+              Help us understand so we can make things better
+            </p>
+          </div>
+
+          {/* Reason Options */}
+          <div className="space-y-3">
+            {reasons.map((reason) => {
+              const Icon = reason.icon;
+              const isSelected = selectedReason === reason.id;
+              
+              return (
+                <button
+                  key={reason.id}
+                  onClick={() => onSelectReason(reason.id)}
+                  className={`w-full flex items-center gap-4 p-4 rounded-lg border-2 transition-all ${
+                    isSelected
+                      ? "border-neon-pink bg-neon-pink/10"
+                      : "border-border/30 bg-card-nested hover:border-neon-pink/50"
+                  }`}
+                >
+                  <div className={`w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                    isSelected ? "bg-neon-pink/20" : "bg-card"
+                  }`}>
+                    <Icon className={`w-6 h-6 ${isSelected ? "text-neon-pink" : "text-muted-foreground"}`} />
+                  </div>
+                  <span className={`text-lg ${isSelected ? "text-neon-pink font-semibold" : "text-white"}`}>
+                    {reason.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Continue Button */}
+          <Button
+            onClick={onSubmit}
+            disabled={!selectedReason}
+            className="w-full py-6 text-lg font-bold"
+            size="lg"
+          >
+            Continue
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ✅ OFFER VIEW COMPONENT (unchanged)
 function OfferView({
   discount,
   userName,
@@ -154,7 +260,6 @@ function OfferView({
         </CardHeader>
 
         <CardContent className="space-y-6">
-          {/* Discount Highlight */}
           <div className="relative p-8 bg-gradient-to-br from-neon-pink/10 to-neon-purple/10 rounded-xl border border-neon-pink/30">
             <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
               <span className="bg-neon-pink text-black text-xs font-bold px-4 py-1 rounded-full">
@@ -167,7 +272,6 @@ function OfferView({
             </div>
           </div>
 
-          {/* Benefits */}
           <div className="space-y-3">
             <BenefitItem
               icon={TrendingDown}
@@ -177,7 +281,6 @@ function OfferView({
             <BenefitItem icon={Clock} text="Cancel anytime, no strings attached" />
           </div>
 
-          {/* CTA */}
           <div className="space-y-3">
             <Button
               onClick={onClaim}
@@ -207,7 +310,7 @@ function OfferView({
   );
 }
 
-// ✅ SUCCESS VIEW COMPONENT
+// ✅ SUCCESS VIEW COMPONENT (unchanged)
 function SuccessView({ discount }: { discount: string }) {
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
@@ -253,7 +356,6 @@ function SuccessView({ discount }: { discount: string }) {
   );
 }
 
-// ✅ BENEFIT ITEM COMPONENT
 function BenefitItem({ icon: Icon, text }: { icon: any; text: string }) {
   return (
     <div className="flex items-center gap-3 p-3 bg-card-nested rounded-lg">

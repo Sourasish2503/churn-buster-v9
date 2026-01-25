@@ -934,6 +934,13 @@ video {
 .border-yellow-500\/50 {
   border-color: rgb(234 179 8 / 0.5);
 }
+.border-border\/30 {
+  border-color: hsl(var(--border) / 0.3);
+}
+.border-neon-pink {
+  --tw-border-opacity: 1;
+  border-color: rgb(255 0 255 / var(--tw-border-opacity, 1));
+}
 .bg-background {
   background-color: hsl(var(--background));
 }
@@ -983,6 +990,9 @@ video {
 }
 .bg-yellow-500\/10 {
   background-color: rgb(234 179 8 / 0.1);
+}
+.bg-neon-pink\/10 {
+  background-color: rgb(255 0 255 / 0.1);
 }
 .bg-gradient-to-br {
   background-image: linear-gradient(to bottom right, var(--tw-gradient-stops));
@@ -1291,6 +1301,7 @@ video {
 .text-neon-cyan { color: hsl(var(--neon-cyan)); text-shadow: 0 0 10px rgba(0, 243, 255, 0.5); }
 .text-neon-pink { color: hsl(var(--neon-pink)); text-shadow: 0 0 10px rgba(255, 0, 255, 0.5); }
 /* Border Glows */
+.border-neon-pink { border-color: hsl(var(--neon-pink)); box-shadow: 0 0 10px rgba(255, 0, 255, 0.2); }
 /* Glassmorphism Panel */
 /* Animations */
 .animate-slide-up {
@@ -1322,6 +1333,10 @@ video {
 
 .selection\:bg-cyan-500\/30::selection {
   background-color: rgb(6 182 212 / 0.3);
+}
+
+.hover\:border-neon-pink\/50:hover {
+  border-color: rgb(255 0 255 / 0.5);
 }
 
 .hover\:bg-accent:hover {
