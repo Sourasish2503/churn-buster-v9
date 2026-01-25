@@ -1,208 +1,266 @@
 "use client";
 
 import { useState } from "react";
-import { DollarSign, Users, TrendingDown, Clock, ShieldCheck, AlertTriangle } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
+import { Shield, TrendingDown, Heart, Clock, Sparkles, CheckCircle2 } from "lucide-react";
 
 interface RetentionDashboardProps {
-  membershipId: string;
-  companyId: string;
   experienceId: string;
-  customerName: string;
-  discountPercent: string;
-  previewMode?: boolean;
+  membershipId?: string;
+  companyId?: string;
+  discountPercent?: string;
+  isDemo?: boolean;
+  demoData?: {
+    membershipId: string;
+    companyId: string;
+    discountPercent: string;
+    userName: string;
+  };
 }
-
-interface CancellationReason {
-  id: string;
-  label: string;
-  icon: typeof DollarSign;
-}
-
-const cancellationReasons: CancellationReason[] = [
-  { id: "expensive", label: "Too expensive", icon: DollarSign },
-  { id: "not_using", label: "Not using it enough", icon: Users },
-  { id: "missing_features", label: "Missing features", icon: TrendingDown },
-  { id: "need_break", label: "Need a break", icon: Clock },
-];
 
 export function RetentionDashboard({
+  experienceId,
   membershipId,
   companyId,
-  experienceId,
-  customerName,
-  discountPercent,
-  previewMode = false,
+  discountPercent = "30",
+  isDemo = false,
+  demoData,
 }: RetentionDashboardProps) {
-  // --- PRESERVING YOUR EXACT STATE & LOGIC ---
-  const [selectedReason, setSelectedReason] = useState<string | null>(null);
-  const [claimed, setClaimed] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [step, setStep] = useState<"offer" | "success">("offer");
+  const [claiming, setClaiming] = useState(false);
+
+  // ✅ FIXED: Use demo data if in demo mode, with fallback values
+  const effectiveMembershipId = isDemo ? demoData?.membershipId || "demo_membership_123" : membershipId || "";
+  const effectiveCompanyId = isDemo ? demoData?.companyId || "demo_company_123" : companyId || "";
+  const effectiveDiscount = isDemo ? demoData?.discountPercent || "80" : discountPercent || "30";
+  const userName = isDemo ? demoData?.userName || "Demo User" : "there";
 
   const handleClaim = async () => {
-    if (!selectedReason) {
-      setErrorMessage("Please select a reason so we can help better.");
-      return;
-    }
-    
-    setLoading(true);
-    setErrorMessage(null);
-
-    if (previewMode) {
-      // Logic from your file (simulating delay for preview)
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setClaimed(true);
-      setLoading(false);
+    // ✅ DEMO MODE - Just show success without API call
+    if (isDemo) {
+      setClaiming(true);
+      setTimeout(() => {
+        setClaiming(false);
+        setStep("success");
+      }, 1500);
       return;
     }
 
+    // ✅ PRODUCTION MODE - Make actual API call
+    setClaiming(true);
     try {
       const response = await fetch("/api/claim-offer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          membershipId,
-          companyId,
-          discountPercent,
-          reason: selectedReason // Passing the reason for analytics
+          membershipId: effectiveMembershipId,
+          companyId: effectiveCompanyId,
+          experienceId,
+          discountPercent: effectiveDiscount,
         }),
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to claim offer");
-      }
+      const data = await response.json();
 
-      setClaimed(true);
+      if (response.ok) {
+        setStep("success");
+      } else {
+        alert(data.error || "Failed to claim offer");
+      }
     } catch (error) {
-      console.error(error);
-      setErrorMessage("Something went wrong. Please try again.");
+      console.error("Claim error:", error);
+      alert("Network error. Please try again.");
     } finally {
-      setLoading(false);
+      setClaiming(false);
     }
   };
 
-  // --- NEW VISUALS (LOGIC UNTOUCHED) ---
-
-  if (claimed) {
+  // ✅ DEMO MODE BANNER
+  if (isDemo) {
     return (
-      <div className="w-full max-w-md mx-auto p-4 animate-fade-in">
-        <Card glow="pink" className="bg-black/80 backdrop-blur-xl border-pink-500/50">
-          <CardContent className="pt-6 text-center space-y-4">
-            <div className="w-16 h-16 bg-pink-500/20 rounded-full flex items-center justify-center mx-auto shadow-[0_0_20px_rgba(255,0,255,0.4)]">
-              <ShieldCheck className="w-8 h-8 text-neon-pink" />
-            </div>
-            <h2 className="text-2xl font-bold text-white">Offer Claimed!</h2>
-            <p className="text-gray-400">
-              The <span className="text-neon-pink font-bold">{discountPercent}% discount</span> has been applied to your membership.
+      <div className="min-h-screen bg-background relative">
+        {/* Demo Mode Banner */}
+        <div className="absolute top-0 left-0 right-0 bg-neon-yellow/20 border-b border-neon-yellow/30 py-3 px-4 z-50">
+          <div className="max-w-4xl mx-auto text-center">
+            <p className="text-sm font-semibold text-neon-yellow">
+              🎬 DEMO MODE - This is a preview of how your retention offer will look to members
             </p>
-            <div className="p-3 bg-white/5 rounded-lg border border-white/10 text-sm text-gray-500">
-              ID: {membershipId}
-            </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
+
+        {/* Main Content (offset for banner) */}
+        <div className="pt-16">
+          {step === "offer" ? (
+            <OfferView
+              discount={effectiveDiscount}
+              userName={userName}
+              onClaim={handleClaim}
+              claiming={claiming}
+            />
+          ) : (
+            <SuccessView discount={effectiveDiscount} />
+          )}
+        </div>
       </div>
     );
   }
 
+  // ✅ PRODUCTION MODE
   return (
-    <div className="w-full max-w-2xl mx-auto p-4 space-y-8 animate-slide-up">
-      
-      {/* Header */}
-      <div className="text-center space-y-2">
-        {previewMode && (
-          <div className="inline-block px-3 py-1 bg-yellow-500/10 border border-yellow-500/30 rounded-full text-yellow-500 text-xs font-bold mb-4">
-            PREVIEW MODE
-          </div>
-        )}
-        <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight">
-          Wait, <span className="text-neon-cyan drop-shadow-[0_0_10px_rgba(0,243,255,0.6)]">{customerName}</span>
-        </h1>
-        <p className="text-xl text-gray-400 font-light">
-          Before you go, let us make it right.
-        </p>
-      </div>
+    <div className="min-h-screen bg-background">
+      {step === "offer" ? (
+        <OfferView
+          discount={effectiveDiscount}
+          userName={userName}
+          onClaim={handleClaim}
+          claiming={claiming}
+        />
+      ) : (
+        <SuccessView discount={effectiveDiscount} />
+      )}
+    </div>
+  );
+}
 
-      <Card glow="cyan" className="bg-black/60 backdrop-blur-xl border-white/10">
-        <CardContent className="p-8 space-y-8">
-          
-          {/* Discount Banner */}
-          <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-cyan-900/40 to-blue-900/40 border border-cyan-500/30 p-6 text-center">
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent opacity-50" />
-            <h2 className="text-3xl font-bold text-white mb-1">
-              {discountPercent}% OFF
-            </h2>
-            <p className="text-cyan-200 text-sm uppercase tracking-widest font-semibold">
-              Retention Offer
+// ✅ OFFER VIEW COMPONENT
+function OfferView({
+  discount,
+  userName,
+  onClaim,
+  claiming,
+}: {
+  discount: string;
+  userName: string;
+  onClaim: () => void;
+  claiming: boolean;
+}) {
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <Card className="max-w-2xl w-full" glow="pink">
+        <CardHeader className="text-center space-y-4 pb-6">
+          <div className="flex justify-center">
+            <div className="w-20 h-20 rounded-full bg-neon-pink/20 flex items-center justify-center">
+              <Heart className="w-10 h-10 text-neon-pink" />
+            </div>
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground mb-2">Before you go...</p>
+            <CardTitle className="text-4xl font-bold">
+              Wait, {userName}! We Have a{" "}
+              <span className="text-neon-pink glow-pink">Special Offer</span>
+            </CardTitle>
+          </div>
+        </CardHeader>
+
+        <CardContent className="space-y-6">
+          {/* Discount Highlight */}
+          <div className="relative p-8 bg-gradient-to-br from-neon-pink/10 to-neon-purple/10 rounded-xl border border-neon-pink/30">
+            <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
+              <span className="bg-neon-pink text-black text-xs font-bold px-4 py-1 rounded-full">
+                EXCLUSIVE OFFER
+              </span>
+            </div>
+            <div className="text-center space-y-2">
+              <p className="text-6xl font-bold text-neon-pink glow-pink">{discount}% OFF</p>
+              <p className="text-xl text-white">For the next 3 months</p>
+            </div>
+          </div>
+
+          {/* Benefits */}
+          <div className="space-y-3">
+            <BenefitItem
+              icon={TrendingDown}
+              text={`Save ${discount}% on your subscription for 3 months`}
+            />
+            <BenefitItem icon={Shield} text="Keep all your current benefits" />
+            <BenefitItem icon={Clock} text="Cancel anytime, no strings attached" />
+          </div>
+
+          {/* CTA */}
+          <div className="space-y-3">
+            <Button
+              onClick={onClaim}
+              disabled={claiming}
+              className="w-full py-6 text-lg font-bold"
+              size="lg"
+            >
+              {claiming ? (
+                <>
+                  <Sparkles className="w-5 h-5 mr-2 animate-spin" />
+                  Applying Offer...
+                </>
+              ) : (
+                <>
+                  <Heart className="w-5 h-5 mr-2" />
+                  Yes! Give Me {discount}% OFF
+                </>
+              )}
+            </Button>
+            <p className="text-center text-sm text-muted-foreground">
+              One-time offer • Automatically applied to your account
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ✅ SUCCESS VIEW COMPONENT
+function SuccessView({ discount }: { discount: string }) {
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <Card className="max-w-2xl w-full" glow="cyan">
+        <CardContent className="p-12 text-center space-y-6">
+          <div className="flex justify-center">
+            <div className="w-24 h-24 rounded-full bg-green-500/20 flex items-center justify-center">
+              <CheckCircle2 className="w-12 h-12 text-green-500" />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <h2 className="text-3xl font-bold">🎉 Offer Claimed Successfully!</h2>
+            <p className="text-lg text-muted-foreground">
+              Your {discount}% discount will be applied by the creator within 24 hours.
             </p>
           </div>
 
-          {/* Reason Selection */}
-          <div className="space-y-4">
-            <label className="text-sm font-medium text-gray-400 uppercase tracking-wider ml-1">
-              Why are you leaving?
-            </label>
-            <div className="grid grid-cols-1 gap-3">
-              {cancellationReasons.map((reason) => {
-                const Icon = reason.icon;
-                const isSelected = selectedReason === reason.id;
-                
-                return (
-                  <button
-                    key={reason.id}
-                    onClick={() => setSelectedReason(reason.id)}
-                    className={cn(
-                      "flex items-center gap-4 p-4 rounded-xl border transition-all duration-300 text-left group",
-                      isSelected 
-                        ? "bg-cyan-950/50 border-cyan-400 shadow-[0_0_15px_rgba(0,243,255,0.2)]" 
-                        : "bg-white/5 border-white/5 hover:bg-white/10 hover:border-cyan-500/30"
-                    )}
-                  >
-                    <div className={cn(
-                      "p-2 rounded-lg transition-colors",
-                      isSelected ? "bg-cyan-500 text-black" : "bg-white/10 text-gray-400 group-hover:text-cyan-400"
-                    )}>
-                      <Icon size={20} />
-                    </div>
-                    <span className={cn(
-                      "font-medium transition-colors",
-                      isSelected ? "text-cyan-400" : "text-gray-300 group-hover:text-white"
-                    )}>
-                      {reason.label}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+          <div className="bg-card-nested rounded-lg p-6 space-y-3">
+            <h3 className="font-semibold text-lg">What happens next?</h3>
+            <ul className="text-left space-y-2 text-muted-foreground">
+              <li className="flex items-start gap-2">
+                <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                <span>The creator has been notified of your accepted offer</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                <span>Your {discount}% discount will be applied to your next 3 billing cycles</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <CheckCircle2 className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                <span>You'll receive a confirmation email once the discount is active</span>
+              </li>
+            </ul>
           </div>
 
-          {/* Error Message */}
-          {errorMessage && (
-            <div className="flex items-center gap-2 text-red-400 bg-red-950/30 p-3 rounded-lg border border-red-900/50 text-sm">
-              <AlertTriangle size={16} />
-              {errorMessage}
-            </div>
-          )}
-
-          {/* Action Button */}
-          <Button
-            variant="neon"
-            size="xl"
-            className="w-full h-14 text-lg"
-            onClick={handleClaim}
-            disabled={loading}
-          >
-            {loading ? "Applying Discount..." : "Claim This Offer"}
-          </Button>
-
-          <p className="text-center text-xs text-gray-600 pt-2">
-            By clicking above, you agree to apply this discount to your next billing cycle.
+          <p className="text-sm text-muted-foreground">
+            Thank you for staying with us! 💙
           </p>
-
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+// ✅ BENEFIT ITEM COMPONENT
+function BenefitItem({ icon: Icon, text }: { icon: any; text: string }) {
+  return (
+    <div className="flex items-center gap-3 p-3 bg-card-nested rounded-lg">
+      <div className="w-10 h-10 rounded-lg bg-neon-cyan/20 flex items-center justify-center flex-shrink-0">
+        <Icon className="w-5 h-5 text-neon-cyan" />
+      </div>
+      <p className="text-sm">{text}</p>
     </div>
   );
 }

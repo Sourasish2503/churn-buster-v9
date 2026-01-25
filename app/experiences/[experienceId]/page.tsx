@@ -1,52 +1,9 @@
-// ✅ CORRECT imports based on your structure
 import { headers } from "next/headers";
 import { whopsdk } from "@/lib/whop";
 import { db } from "@/lib/firebase";
 import { RetentionDashboard } from "@/components/retention-dash";
 
-
 export const dynamic = 'force-dynamic';
-
-// Fetch company's retention config from Firebase
-async function getCompanyConfig(companyId: string): Promise<{ discountPercent: string }> {
-  const defaultConfig = { discountPercent: "30" };
-  if (!db) {
-    return defaultConfig;
-  }
-
-  try {
-    const configDoc = await db.collection("configs").doc(companyId).get();
-    if (configDoc.exists) {
-      const data = configDoc.data();
-      return {
-        discountPercent: data?.discountPercent || defaultConfig.discountPercent,
-      };
-    }
-  } catch (err) {
-    console.error("Failed to fetch company config:", err);
-  }
-
-  return defaultConfig;
-}
-
-// Check if company has available credits
-async function hasAvailableCredits(companyId: string): Promise<boolean> {
-  if (!db) {
-    return false;
-  }
-
-  try {
-    const creditDoc = await db.collection("credits").doc(companyId).get();
-    if (creditDoc.exists) {
-      const balance = creditDoc.data()?.balance || 0;
-      return balance > 0;
-    }
-  } catch (err) {
-    console.error("Failed to check credits:", err);
-  }
-
-  return false;
-}
 
 export default async function ExperiencePage({
   params,
@@ -55,98 +12,122 @@ export default async function ExperiencePage({
 }) {
   const { experienceId } = await params;
 
+  // ✅ 1. VERIFY USER TOKEN
+  let userId: string | undefined;
+  let isPreviewMode = false;
+  
   try {
-    // 1. Verify User
-    const { userId } = await whopsdk.verifyUserToken(await headers());
-    if (!userId) {
-      return (
-        <div className="min-h-screen bg-background flex items-center justify-center p-4">
-          <div className="text-center space-y-4">
-            <h1 className="text-2xl font-bold text-destructive">Access Denied</h1>
-            <p className="text-muted-foreground">Unable to verify your Whop session.</p>
-          </div>
-        </div>
-      );
-    }
+    const verifyResult = await whopsdk.verifyUserToken(await headers());
+    userId = verifyResult?.userId;
+  } catch (error) {
+    console.log("Token verification failed, might be preview mode:", error);
+  }
 
-    // 2. Resolve Experience → Company ✅
-    const experience = await whopsdk.experiences.retrieve(experienceId);
-    const companyId = experience.company.id;
+  // ✅ 2. CHECK IF THIS IS PREVIEW/DEMO MODE
+  const headersList = await headers();
+  const referer = headersList.get("referer") || "";
+  const host = headersList.get("host") || "";
+  
+  // Detect Whop preview mode
+  if (referer.includes("whop.com") || host.includes("localhost") || !userId) {
+    isPreviewMode = true;
+    console.log("Preview/Demo mode detected");
+  }
 
-    // 3. Get Memberships (scoped to user + company) ✅
-    const memberships = await whopsdk.memberships.list({
-      user_ids: [userId],
-      company_id: companyId,
-    });
-
-    // 4. Filter active membership for THIS experience ✅
-    const activeMembership = memberships.data?.find((m: any) => {
-      // Check if cancelled or expired
-      if (m.cancelled_at) return false;
-      if (m.expires_at && new Date(m.expires_at) < new Date()) return false;
-
-      // Check if membership includes this experience
-      const hasExperience = m.plan?.experiences?.some((exp: any) => exp.id === experienceId);
-      return hasExperience;
-    });
-
-    if (!activeMembership) {
-      return (
-        <div className="min-h-screen bg-background flex items-center justify-center p-4">
-          <div className="text-center space-y-4">
-            <h1 className="text-2xl font-bold text-destructive">No Active Membership</h1>
-            <p className="text-muted-foreground">Could not find an active membership for this experience.</p>
-          </div>
-        </div>
-      );
-    }
-
-    // 5. Check if company has credits
-    const hasCredits = await hasAvailableCredits(companyId);
-    if (!hasCredits) {
-      return (
-        <div className="min-h-screen bg-background flex items-center justify-center p-4">
-          <div className="text-center space-y-4">
-            <h1 className="text-2xl font-bold">We're Sorry to See You Go</h1>
-            <p className="text-muted-foreground">Please contact support to complete your cancellation.</p>
-          </div>
-        </div>
-      );
-    }
-
-    // 6. Get User Details
-    const user = await whopsdk.users.retrieve(userId);
-    const userWithEmail = user as { username?: string; email?: string; id: string };
-    const customerName = userWithEmail.username ||
-      userWithEmail.email?.split('@')[0] ||
-      userId.slice(0, 8);
-
-    // 7. Get Company Config
-    const config = await getCompanyConfig(companyId);
-
-    // 8. Render Dashboard
+  // ✅ 3. IF PREVIEW MODE - SHOW DEMO VERSION
+  if (isPreviewMode) {
     return (
       <RetentionDashboard
-        membershipId={activeMembership.id}
-        companyId={companyId}
         experienceId={experienceId}
-        discountPercent={config.discountPercent}
-        customerName={customerName}
-        previewMode={false}
+        isDemo={true}
+        demoData={{
+          membershipId: "demo_membership_123",
+          companyId: "demo_company_123",
+          discountPercent: "80",
+          userName: "Demo User",
+        }}
       />
     );
-  } catch (error) {
-    console.error("Experience Page Error:", error);
+  }
+
+  // ✅ 4. PRODUCTION MODE - VERIFY MEMBERSHIP
+  if (!userId) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <div className="text-center space-y-4">
-          <h1 className="text-2xl font-bold text-destructive">Error Loading Experience</h1>
+          <h1 className="text-2xl font-bold text-destructive">Unauthorized</h1>
           <p className="text-muted-foreground">
-            {error instanceof Error ? error.message : "Unknown error occurred"}
+            Could not verify your Whop account. Please access this page through the Whop platform.
           </p>
-          <p className="text-sm text-muted-foreground">Experience ID: {experienceId}</p>
         </div>
       </div>
     );
   }
+
+  // Get the membership from the experience
+  let membership;
+  let companyId;
+  let discountPercent = "30"; // Default
+
+  try {
+    // Fetch experience details to get the company/membership context
+    const experience = await whopsdk.experiences.retrieve(experienceId);
+    companyId = experience?.company?.id;
+
+    if (!companyId) {
+      throw new Error("No company associated with this experience");
+    }
+
+    // ✅ FIXED: Get all memberships for this company, then filter by user
+    const memberships = await whopsdk.memberships.list({
+      company_id: companyId, // ✅ Changed from user_id
+    });
+
+    // ✅ FIXED: Filter to find this user's membership
+    membership = memberships?.data?.find((m: any) => m.user?.id === userId);
+
+    if (!membership) {
+      throw new Error("No active membership found");
+    }
+
+    // Get discount configuration from Firebase
+    if (db) {
+      const configDoc = await db
+        .collection("businesses")
+        .doc(companyId)
+        .collection("config")
+        .doc("retention")
+        .get();
+
+      if (configDoc.exists) {
+        discountPercent = configDoc.data()?.discountPercent || "30";
+      }
+    }
+  } catch (error) {
+    console.error("Error fetching membership:", error);
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="text-center space-y-4">
+          <h1 className="text-2xl font-bold text-destructive">No Active Membership</h1>
+          <p className="text-muted-foreground">
+            Could not find an active membership for this experience.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Please ensure you have an active subscription to access this page.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // ✅ 5. RENDER PRODUCTION VERSION
+  return (
+    <RetentionDashboard
+      experienceId={experienceId}
+      membershipId={membership.id}
+      companyId={companyId}
+      discountPercent={discountPercent}
+      isDemo={false}
+    />
+  );
 }
